@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { FeedCard } from "@/components/FeedCard";
+import { FeedCardSkeleton } from "@/components/FeedCardSkeleton";
 import { fetchFeed, fetchUsers } from "@/lib/api";
 import { isAuthenticated, logout } from "@/lib/auth";
 import type { FeedItem, User } from "@/lib/api";
@@ -38,7 +39,8 @@ export function FeedClient() {
 
   const {
     data: feed,
-    isFetching: feedLoading,
+    isLoading: feedInitialLoading,
+    isFetching: feedFetching,
     error: feedError,
   } = useQuery<{ items: FeedItem[]; total: number }>({
     queryKey: ["feed", effectiveUserId, page, pageSize, category],
@@ -143,13 +145,18 @@ export function FeedClient() {
       {(usersError || feedError) && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">Failed to load data.</div>
       )}
-      {(usersLoading || feedLoading) && <div className="text-sm text-slate-600">Loading feed...</div>}
 
       <div className="space-y-4">
-        {items.map((item: FeedItem) => (
-          <FeedCard key={item.id} item={item} showSignals={showSignals} />
-        ))}
-        {!feedLoading && items.length === 0 && <div className="text-sm text-slate-600">No items found.</div>}
+        {usersLoading || feedInitialLoading || (feedFetching && items.length === 0) ? (
+          Array.from({ length: 5 }).map((_, i) => <FeedCardSkeleton key={i} />)
+        ) : (
+          <>
+            {items.map((item: FeedItem) => (
+              <FeedCard key={item.id} item={item} showSignals={showSignals} />
+            ))}
+            {!feedFetching && items.length === 0 && <div className="text-sm text-slate-600">No items found.</div>}
+          </>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-700">
