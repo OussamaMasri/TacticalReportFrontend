@@ -1,73 +1,110 @@
-# Tactical Report Feed (Frontend)
+# Tactical Report Feed Frontend
 
-Frontend implementation for the Tactical Report take‑home. It renders a personalized, explainable intelligence feed driven by a multi‑signal ranking API. Built with the Next.js App Router, React Query for data fetching/caching, and Tailwind for styling.
+> **Multi-signal personalized intelligence feed** — Frontend for the Tactical Report take-home, delivering explainable, user-tailored content.
 
-**Live demo:** https://tactical-report-frontend.vercel.app/login
+**Live Demo:** https://tactical-report-frontend.vercel.app/login
 
-## Core Features
-- Credentialed access (`demo` / `tacticalreport`) persisted in `localStorage` with logout support.
-- Server-prefetched data and client hydration (`app/feed/page.tsx`) to reduce first contentful load.
-- User-scoped, paginated feed (`DEFAULT_PAGE_SIZE` = 10) with category filter and placeholder caching to avoid UI flicker.
-- Toggleable signal breakdown chips per item to expose the multi-signal scoring inputs.
-- Loading skeletons and guarded error states for both user roster and feed queries.
-- Clean, responsive layout with Tailwind; reusable UI pieces (`FeedCard`, `FeedFilters`, `FeedPagination`, skeletons).
+---
 
-## Tech Stack & Architecture
-- **Framework:** Next.js 16 (App Router) + React 19 + TypeScript.
-- **Data layer:** `@tanstack/react-query` with server-side prefetch + `HydrationBoundary` for initial users/feed, client queries for subsequent interactions.
-- **Styling:** TailwindCSS.
-- **Auth:** Lightweight client-side gate in `lib/auth.ts` using `localStorage`; redirects to `/login` when unauthenticated and clears state on logout.
-- **API contract:** Configurable `API_BASE` via `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`). Endpoints used:
-  - `GET /api/users` → roster used to seed the default selected user.
-  - `GET /api/feed?user_id={id}&page={n}&page_size={k}[&category=...]` → ranked feed items containing `score`, `signals`, `reason`, and optional `why_it_matters`.
+## Problem Statement
 
-## How Requirements Are Reflected in the Code
-- **Personalization by user & category:** `FeedFilters` selects a user (fallback to first returned) and optional category, resetting pagination on change.
-- **Pagination with smooth UX:** `FeedPagination` drives `page` state; React Query uses `placeholderData` to prevent flicker while fetching new pages.
-- **Multi-signal explainability:** `FeedCard` renders tags, reason text, and a toggle to reveal signal weights (`signals` map) for transparency.
-- **Prefetch & fast first paint:** `app/feed/page.tsx` prefetches users and the first feed page server-side, then hydrates on the client.
-- **Loading & error handling:** Skeletons (`FeedCardSkeleton`, `app/feed/loading.tsx`) cover initial/empty states; consolidated error banner for user/feed failures.
-- **Auth gating:** `LoginForm` checks existing session on mount and redirects; feed page guards and provides logout.
+**The Challenge:** Present a personalized intelligence feed that reflects multi-signal ranking, explainability, and fast navigation for different users and categories.
 
-## Project Structure
-- `app/login/page.tsx` — login surface using `LoginForm`.
-- `app/feed/page.tsx` — SSR prefetch + hydration, then delegates to `FeedClient`.
-- `components/` — feed UI (card, filters, pagination, header, skeletons) and React Query provider.
-- `lib/api.ts` — typed API client and response contracts.
-- `lib/auth.ts` — demo auth, session storage helpers.
-- `lib/constants.ts` — categories, stale times, defaults.
+**Requirements Met:**
+- Auth-gated access (demo creds) with logout
+- Multi-signal explainability (score + signal breakdown)
+- Pagination and filtering by user and category
+- Smooth UX (prefetch, optimistic/page placeholders, virtualization)
+- Production deployment
 
-## Running Locally
-1) Install deps  
+---
+
+## Solution Overview
+
+A **Next.js App Router** frontend that pairs server prefetch with client hydration and React Query caching:
+
+- **Auth Guarded Flow** — `/login` uses demo creds (`demo` / `tacticalreport`) and `localStorage` session; `/feed` redirects if unauthenticated.
+- **SSR Prefetch + Hydration** — `app/feed/page.tsx` prefetches users and the first feed page, then hydrates on the client to reduce FCP.
+- **React Query Data Layer** — Client queries with placeholder data, stale times, and neighbor prefetch for fast page switches.
+- **Optimistic Pagination + Virtualization** — Keep prior items visible during page transitions and virtualize long lists for smooth scrolling.
+- **Explainable Cards** — Each `FeedCard` shows reason, score, tags, and optional signal breakdown.
+- **Resilient UX** — Skeletons, loading states, and a shared error banner cover fetch failures.
+
+---
+
+## Quick Start
+
 ```bash
+# 1) Install dependencies
 npm install
-```
 
-2) Set API base (optional if using default `http://localhost:8000`)  
-```bash
+# 2) (Optional) Point to your API
 export NEXT_PUBLIC_API_BASE_URL="http://localhost:8000"
-```
 
-3) Start dev server  
-```bash
+# 3) Run the dev server
 npm run dev
-```
-Visit `http://localhost:3000`, log in with `demo` / `tacticalreport`, and open `/feed`.
+# open http://localhost:3000 and login with demo / tacticalreport
 
-4) Production build  
-```bash
+# 4) Production build
 npm run build && npm start
 ```
 
+---
+
+## How It Works
+
+- **Auth & Routing:** `lib/auth.ts` manages `localStorage` session; `LoginForm` redirects authenticated users to `/feed`; logout clears the session.
+- **Data Fetching:** `app/feed/page.tsx` prefetches `users` and the first `feed` page on the server, hydrates via `HydrationBoundary`, and the client uses React Query for subsequent requests.
+- **Filtering & Pagination:** `FeedFilters` drives user/category selection (resets to page 1). `FeedPagination` updates `page` with optimistic placeholders and neighbor prefetch to limit flicker.
+- **Virtualized List:** `@tanstack/react-virtual` powers `FeedClient` virtualization to keep scroll smooth on large result sets.
+- **Explainability:** `FeedCard` renders score, category, tags, reason, and optional per-signal chips.
+- **Loading/Error States:** `FeedCardSkeleton` and `app/feed/loading.tsx` cover initial/empty states; a shared inline alert appears on user or feed errors.
+
+---
+
+## API Integration
+
+Base URL: `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`)
+
+- `GET /api/users` — populate the user roster; first user becomes the default selection.
+- `GET /api/feed?user_id={id}&page={n}&page_size={k}[&category=...]` — returns `items`, `total`, `score`, `reason`, `signals`, and optional `why_it_matters`.
+
+---
+
+## Project Structure
+
+- `app/login/page.tsx` — login surface with demo creds.
+- `app/feed/page.tsx` — SSR prefetch + hydration, hands off to `FeedClient`.
+- `components/` — UI and state:
+  - `FeedClient` (virtualized list, pagination, optimistic placeholders)
+  - `FeedCard`, `FeedFilters`, `FeedPagination`, `FeedHeader`, skeletons
+  - `QueryProvider` for React Query client
+- `lib/` — `api` (typed fetchers), `auth` (session helpers), `constants` (categories, stale times, page size).
+
+---
+
+## Architecture
+
+| Layer      | Technology                  | Purpose                                  |
+|------------|-----------------------------|------------------------------------------|
+| UI/SSR     | Next.js 16 (App Router)     | Pages, layouts, server prefetch/hydrate  |
+| Data       | @tanstack/react-query       | Caching, stale times, prefetch           |
+| Virtualize | @tanstack/react-virtual     | Smooth scrolling on large feeds          |
+| Styling    | TailwindCSS  | Responsive UI                            |
+| Language   | TypeScript + React 19       | Frontend implementation                  |
+
+---
+
 ## Manual Test Plan (quick)
-- Login succeeds with `demo` / `tacticalreport`; bad creds show inline error.
-- Reload on `/feed` keeps the session; logout returns to `/login`.
-- Switching user or category reloads feed and resets to page 1.
-- Pagination updates totals and disables buttons at edges.
-- “Show breakdown” reveals signal chips per item; hides when toggled off.
-- API errors show the red inline banner; skeletons appear during initial/slow loads.
+- Login with `demo` / `tacticalreport`; bad creds show inline error.
+- Reload `/feed` keeps the session; Logout returns to `/login`.
+- Change user or category → page resets to 1 and data refreshes.
+- Pagination updates totals, prefetches neighbor pages, reuses placeholders, and disables buttons at edges.
+- Toggle “Show breakdown” to reveal/hide signal chips.
+- Slow network: skeletons appear; errors show the inline red banner.
+
+---
 
 ## Future Improvements
-- Replace client-only auth with real backend tokens + refresh flow.
-- Persist filter state in the URL (search params) for shareable views and back/forward navigation.
-- Add virtualization for large result sets and optimistic UI for rapid page switches.
+- Replace client-only auth with real tokens + refresh.
+- Persist filters/page in URL params for shareable, back/forward-safe navigation.
